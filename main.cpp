@@ -78,17 +78,17 @@ int main(int argc, char* argv[]) {
     std::string model_path = home_dir + "/.autocommand/command_lstm.onnx";
 
     try {
-        // Set log level to FATAL to suppress console error output
+        // Suppress ONNX runtime console logging
         Ort::Env env(ORT_LOGGING_LEVEL_FATAL, "LSTMInference");
         Ort::SessionOptions session_options;
         session_options.SetLogSeverityLevel(ORT_LOGGING_LEVEL_FATAL);
-        
+
         Ort::Session session(env, model_path.c_str(), session_options);
 
         std::string completion = predict_sequence(current_buffer, session, 12);
         std::cout << completion << std::endl;
     } catch (...) {
-        return 0; // Fail silently without breaking terminal output
+        return 0;
     }
 
     return 0;

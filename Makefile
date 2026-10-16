@@ -20,4 +20,4 @@ install:
 	cp command_lstm.onnx* $(HOME)/.autocommand/
 
 clean:
-	rm -rf bin command_lstm.onnx
+	rm -rf bin command_lstm.onnx*

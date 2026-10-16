@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== Building Terminal AI Autocomplete ==="
+echo "=== Installing On-Demand Ghost Text AI Autocomplete ==="
 
-# Build C++ executable and train model
+# Build C++ binary and train model
 make all
 make install
 
@@ -11,14 +11,19 @@ make install
 ZSHRC="$HOME/.zshrc"
 HOOK_MARKER="# AI AUTOCOMPLETE HOOK"
 
-if ! grep -q "$HOOK_MARKER" "$ZSHRC" 2>/dev/null; then
-    echo "Adding hooks to $ZSHRC..."
-    cat << 'EOF' >> "$ZSHRC"
+# Strip previous hook if present
+if grep -q "$HOOK_MARKER" "$ZSHRC" 2>/dev/null; then
+    sed -i '/# AI AUTOCOMPLETE HOOK/,/# END AI AUTOCOMPLETE HOOK/d' "$ZSHRC"
+fi
 
-# AI AUTOCOMPLETE HOOK
+echo "Updating Zsh configuration in $ZSHRC..."
+cat << 'EOF' >> "$ZSHRC"
+
+# AI AUTOCOMPLETE HOOK (ON-DEMAND GHOST TEXT FLOW)
 AI_SUGGEST_BIN="$HOME/bin/cmd_suggest"
 
-function _ai_update_suggestion() {
+# 1. Trigger ghost text ONLY when Ctrl+Space or Ctrl+Tab is explicitly pressed
+function _ai_trigger_autocomplete() {
     if [[ -n "$BUFFER" ]]; then
         local raw_pred=$("$AI_SUGGEST_BIN" "$BUFFER")
         if [[ -n "$raw_pred" ]]; then
@@ -30,50 +35,75 @@ function _ai_update_suggestion() {
             POSTDISPLAY=""
             region_highlight=()
         fi
-    else
-        POSTDISPLAY=""
-        region_highlight=()
     fi
 }
+zle -N _ai_trigger_autocomplete
 
-function _ai_accept_suggestion() {
+# 2. Accept suggestion on Tab (if ghost text is visible) OR fall back to native Zsh completion
+function _ai_accept_or_default_tab() {
     if [[ -n "$POSTDISPLAY" ]]; then
         BUFFER="${BUFFER}${POSTDISPLAY}"
         CURSOR=$#BUFFER
         POSTDISPLAY=""
         region_highlight=()
-        _ai_update_suggestion
     else
         zle expand-or-complete
     fi
 }
-zle -N _ai_accept_suggestion
+zle -N _ai_accept_or_default_tab
 
+# 3. Accept suggestion on Right Arrow / Ctrl+F (if ghost text is visible) OR move cursor right
+function _ai_accept_or_forward_arrow() {
+    if [[ -n "$POSTDISPLAY" ]]; then
+        BUFFER="${BUFFER}${POSTDISPLAY}"
+        CURSOR=$#BUFFER
+        POSTDISPLAY=""
+        region_highlight=()
+    else
+        zle forward-char
+    fi
+}
+zle -N _ai_accept_or_forward_arrow
+
+# 4. Dismiss ghost text on Esc key
 function _ai_dismiss_suggestion() {
-    POSTDISPLAY=""
-    region_highlight=()
+    if [[ -n "$POSTDISPLAY" ]]; then
+        POSTDISPLAY=""
+        region_highlight=()
+    fi
 }
 zle -N _ai_dismiss_suggestion
 
+# Dismiss ghost text automatically if user continues typing or backspacing
 function self-insert() {
+    _ai_dismiss_suggestion
     zle .self-insert
-    _ai_update_suggestion
 }
 function backward-delete-char() {
+    _ai_dismiss_suggestion
     zle .backward-delete-char
-    _ai_update_suggestion
 }
-
 zle -N self-insert
 zle -N backward-delete-char
 
-bindkey '^I' _ai_accept_suggestion
+# KEYBINDINGS
+# Trigger AI Ghost Text: Ctrl+Space (^@) or Ctrl+Tab
+bindkey '^@' _ai_trigger_autocomplete
+bindkey '^[[1;5I' _ai_trigger_autocomplete
+bindkey '^[[27;5;9~' _ai_trigger_autocomplete
+
+# Accept AI Ghost Text (if visible) OR run default Zsh Tab completion
+bindkey '^I' _ai_accept_or_default_tab
+
+# Accept AI Ghost Text (if visible) OR move cursor right
+bindkey '^[[C' _ai_accept_or_forward_arrow
+bindkey '^[OC' _ai_accept_or_forward_arrow
+bindkey '^F' _ai_accept_or_forward_arrow
+
+# Dismiss AI Ghost Text: Esc
 bindkey '^[' _ai_dismiss_suggestion
+# END AI AUTOCOMPLETE HOOK
 EOF
-    echo "Zsh hooks added!"
-else
-    echo "Zsh hooks already configured in $ZSHRC"
-fi
 
 echo "=== Setup Complete! ==="
-echo "Run 'source ~/.zshrc' to start using inline AI suggestions."
+echo "Restart your shell with 'exec zsh' to activate changes."
