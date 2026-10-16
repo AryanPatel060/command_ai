@@ -2,9 +2,10 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <cstdlib>
 #include <onnxruntime_cxx_api.h>
 
-const std::string VOCAB_CHARS = " -abcdefghijklmnopqrstuvwxyz0123456789";
+const std::string VOCAB_CHARS = " -abcdefghijklmnopqrstuvwxyz0123456789./_:-+=@#$%^&*()<>{}[]\"'";
 
 std::unordered_map<char, int64_t> build_char2idx() {
     std::unordered_map<char, int64_t> m;
@@ -18,7 +19,7 @@ std::unordered_map<int64_t, char> build_idx2char() {
     return m;
 }
 
-std::string predict_sequence(std::string current_buffer, Ort::Session& session, int max_chars = 8) {
+std::string predict_sequence(std::string current_buffer, Ort::Session& session, int max_chars = 12) {
     auto char2idx = build_char2idx();
     auto idx2char = build_idx2char();
     std::string generated = "";
@@ -41,24 +42,28 @@ std::string predict_sequence(std::string current_buffer, Ort::Session& session, 
         const char* input_names[] = {"input_seq"};
         const char* output_names[] = {"output_logits"};
 
-        auto output_tensors = session.Run(
-            Ort::RunOptions{nullptr}, input_names, &input_tensor, 1, output_names, 1
-        );
+        try {
+            auto output_tensors = session.Run(
+                Ort::RunOptions{nullptr}, input_names, &input_tensor, 1, output_names, 1
+            );
 
-        float* logits = output_tensors[0].GetTensorMutableData<float>();
-        
-        int max_idx = 0;
-        float max_val = logits[0];
-        for (size_t i = 1; i < VOCAB_CHARS.size(); ++i) {
-            if (logits[i] > max_val) {
-                max_val = logits[i];
-                max_idx = i;
+            float* logits = output_tensors[0].GetTensorMutableData<float>();
+            
+            int max_idx = 0;
+            float max_val = logits[0];
+            for (size_t i = 1; i < VOCAB_CHARS.size(); ++i) {
+                if (logits[i] > max_val) {
+                    max_val = logits[i];
+                    max_idx = i;
+                }
             }
-        }
 
-        char next_char = idx2char[max_idx];
-        generated += next_char;
-        current_buffer += next_char;
+            char next_char = idx2char[max_idx];
+            generated += next_char;
+            current_buffer += next_char;
+        } catch (...) {
+            return "";
+        }
     }
 
     return generated;
@@ -68,20 +73,22 @@ int main(int argc, char* argv[]) {
     if (argc < 2) return 0;
     std::string current_buffer = argv[1];
 
-    // Resolve absolute path to command_lstm.onnx
     const char* home_env = std::getenv("HOME");
     std::string home_dir = home_env ? home_env : "/root";
-    std::string model_path = home_dir + "/autocommand/command_lstm.onnx";
+    std::string model_path = home_dir + "/.autocommand/command_lstm.onnx";
 
     try {
-        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "LSTMInference");
+        // Set log level to FATAL to suppress console error output
+        Ort::Env env(ORT_LOGGING_LEVEL_FATAL, "LSTMInference");
         Ort::SessionOptions session_options;
+        session_options.SetLogSeverityLevel(ORT_LOGGING_LEVEL_FATAL);
+        
         Ort::Session session(env, model_path.c_str(), session_options);
 
-        std::string completion = predict_sequence(current_buffer, session, 6);
+        std::string completion = predict_sequence(current_buffer, session, 12);
         std::cout << completion << std::endl;
     } catch (...) {
-        return 0; // Fail silently on error to prevent breaking terminal output
+        return 0; // Fail silently without breaking terminal output
     }
 
     return 0;

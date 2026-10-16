@@ -1,0 +1,13 @@
+git status
+git commit -m "update"
+git checkout -b main
+git pull origin main
+git push origin main
+cd Documents
+ls -la
+docker ps
+docker-compose up -d
+python3 -m venv venv
+source venv/bin/activate
+sudo apt update
+sudo apt upgrade -y 

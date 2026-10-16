@@ -1,15 +1,19 @@
+import os
 import torch
 import torch.nn as nn
 
-# 1. Standardized vocabulary matching C++
-VOCAB_CHARS = " -abcdefghijklmnopqrstuvwxyz0123456789"
+# Standardized vocabulary matching C++
+VOCAB_CHARS = " -abcdefghijklmnopqrstuvwxyz0123456789./_:-+=@#$%^&*()<>{}[]\"'"
 char2idx = {ch: i for i, ch in enumerate(VOCAB_CHARS)}
-vocab_size = len(VOCAB_CHARS)  # 38
+vocab_size = len(VOCAB_CHARS)
 
-dataset = [
-    "git status", "git commit -m", "git checkout", 
-    "cd Documents", "ls -la", "docker ps", "sta"
-]
+# 1. Load dataset from commands.txt
+commands_file = "commands.txt"
+if os.path.exists(commands_file):
+    with open(commands_file, "r") as f:
+        dataset = [line.strip().lower() for line in f if line.strip()]
+else:
+    dataset = ["git status", "git commit -m", "ls -la"]
 
 class CharLSTM(nn.Module):
     def __init__(self, vocab_size, hidden_dim=64):
@@ -24,12 +28,12 @@ class CharLSTM(nn.Module):
         return self.fc(out[:, -1, :])
 
 model = CharLSTM(vocab_size)
-
-# 2. Train model briefly so it learns patterns
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-for epoch in range(100):
+# 2. Train model on command patterns
+print(f"Training model on {len(dataset)} commands from {commands_file}...")
+for epoch in range(120):
     for cmd in dataset:
         for i in range(1, len(cmd)):
             input_seq = torch.tensor([[char2idx.get(c, 0) for c in cmd[:i]]], dtype=torch.long)
@@ -41,7 +45,7 @@ for epoch in range(100):
             loss.backward()
             optimizer.step()
 
-# 3. Export with full vocabulary size
+# 3. Export model to ONNX
 model.eval()
 dummy_input = torch.tensor([[char2idx['g'], char2idx['i']]], dtype=torch.long)
 torch.onnx.export(
@@ -49,4 +53,4 @@ torch.onnx.export(
     input_names=["input_seq"], output_names=["output_logits"],
     dynamic_axes={"input_seq": {1: "seq_length"}}
 )
-print(f"Model exported successfully with vocab size {vocab_size}!")
+print("Model saved successfully as command_lstm.onnx")
